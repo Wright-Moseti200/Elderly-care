@@ -1,113 +1,157 @@
-import React from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { ElderlyContext } from '../context/context'; // Adjust path if needed
 
 const Metric = () => {
-  // Sample health metrics data grouped by timestamp - only specified readings
-  const groupedMetrics = [
-    {
-      timestamp: '2023-10-27 08:00 AM',
-      metrics: [
-        { id: 1, type: 'Blood Pressure', value: '120/80', status: 'Normal', color: 'green' },
-        { id: 2, type: 'Heart Rate', value: '72 bpm', status: 'Normal', color: 'green' },
-        { id: 3, type: 'Glucose Level', value: '110 mg/dL', status: 'Warning', color: 'yellow' },
-      ]
-    }
-    // Removed other timestamp groups
-  ];
+  // --- Context Integration ---
+  const { user, getMetrics, addMetrics, error: contextError, setError } = useContext(ElderlyContext);
 
-  // Function to get status badge styles based on status
-  const getStatusBadgeClass = (status) => {
-    switch (status) {
-      case 'Normal':
-        return 'bg-green-100 text-green-800 border border-green-300';
-      case 'Warning':
-        return 'bg-yellow-100 text-yellow-800 border border-yellow-300';
-      case 'Critical':
-        return 'bg-red-100 text-red-800 border border-red-300';
-      default:
-        return 'bg-gray-100 text-gray-800 border border-gray-300';
+  // --- State ---
+  const [metricsList, setMetricsList] = useState([]);
+  const [localError, setLocalError] = useState(null);
+  const [newMetric, setNewMetric] = useState({
+    blood_pressure: '',
+    heart_rate: '',
+    glucose_level: ''
+  });
+
+  // --- Fetch Metrics on Mount or User Change ---
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      setLocalError(null);
+      if (contextError && setError) setError(null);
+      try {
+        const fetchedMetrics = await getMetrics();
+        // Ensure we always have an array
+        setMetricsList(Array.isArray(fetchedMetrics) ? fetchedMetrics : []);
+      } catch (err) {
+        setLocalError('Failed to load health metrics.');
+        console.error("Metric.jsx: Error fetching metrics:", err);
+      }
+    };
+    if (user) { fetchMetrics(); } else { setMetricsList([]); }
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // --- Handlers ---
+  const handleInputChange = (e) => { /* ... (no changes) ... */
+    setNewMetric({ ...newMetric, [e.target.name]: e.target.value });
+  };
+  const handleAddMetric = async (e) => { /* ... (no changes - posts new metric, refetches list) ... */
+     e.preventDefault();
+    if (!newMetric.blood_pressure || !newMetric.heart_rate || !newMetric.glucose_level) {
+      setLocalError('Please fill in all metric fields.');
+      return;
+    }
+    setLocalError(null);
+    if (contextError && setError) setError(null);
+    try {
+      await addMetrics(newMetric);
+      setNewMetric({ blood_pressure: '', heart_rate: '', glucose_level: '' });
+      const updatedMetrics = await getMetrics();
+      setMetricsList(Array.isArray(updatedMetrics) ? updatedMetrics : []);
+    } catch (err) {
+      setLocalError('Failed to add metric reading.');
+      console.error("Metric.jsx: Error adding metric:", err);
     }
   };
 
-  // Function to get the overall status for a group of metrics based on the most severe status
-  const getGroupStatus = (metrics) => {
-     // Define severity order (critical > warning > normal)
-     const severityOrder = { 'Critical': 3, 'Warning': 2, 'Normal': 1 };
-     let highestSeverity = 0;
-     let groupStatus = 'Normal'; // Default
-
-     metrics.forEach(metric => {
-       const severity = severityOrder[metric.status] || 0; // Default to 0 if status not found
-       if (severity > highestSeverity) {
-         highestSeverity = severity;
-         groupStatus = metric.status;
-       }
-     });
-
-     return groupStatus;
-  };
-
+  // --- Render Logic ---
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-3xl mx-auto"> {/* Restored original max-width for card container */}
+      <div className="max-w-3xl mx-auto">
         {/* Header */}
-        <div className="mb-6 text-center">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text text-transparent">
-            Health Metrics
-          </h1>
-          <p className="text-gray-600 mt-2">Your recent health measurements grouped by time</p>
+        <div className="mb-8 text-center">
+             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text text-transparent">
+               Health Metrics
+             </h1>
+             <p className="text-gray-600 mt-2">
+                {user?.role === 'caregiver' ? 'Record and view recent health measurements' : 'Recent health measurements'}
+             </p>
         </div>
 
-        {/* List of Metric Cards */}
-        <div className="space-y-6"> {/* Restored original space between cards */}
-          {groupedMetrics.map((group) => {
-            const groupStatus = getGroupStatus(group.metrics); // Determine status for the whole group
-            return (
-              <div
-                key={group.timestamp}
-                className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200" // Restored original rounded and shadow
-              >
-                {/* Card Header - Time and Overall Status */}
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 text-white"> {/* Restored original padding */}
-                  <div className="flex items-center justify-between">
-                     <h2 className="text-lg font-bold">Readings at {group.timestamp}</h2> {/* Restored original font size */}
-                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(groupStatus)}`}> {/* Restored original badge size */}
-                       {groupStatus}
-                     </span>
-                  </div>
-                </div>
+        {/* Error Display */}
+        {(localError || contextError) && (
+            <div className="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+              <strong className="font-bold">Error: </strong>
+              <span className="block sm:inline">{localError || contextError}</span>
+            </div>
+        )}
 
-                {/* List of Metrics inside the card */}
-                <ul className="divide-y divide-gray-100 p-4"> {/* Restored original padding */}
-                  {group.metrics.map((metric) => (
-                    <li key={metric.id} className="py-3 first:pt-0 last:pb-0"> {/* Restored original vertical padding */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-base font-semibold text-gray-900">{metric.type}</h3> {/* Restored original font size */}
-                          <p className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-800 bg-clip-text text-transparent">
-                            {metric.value} {/* Restored original font size */}
-                          </p>
-                        </div>
-                         {/* Status Text - Using checkmark or warning icon */}
-                         <span className={`flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold ${ // Restored original badge size
-                           metric.status === 'Normal'
-                             ? 'bg-green-100 text-green-800 border border-green-300'
-                             : metric.status === 'Warning'
-                               ? 'bg-yellow-100 text-yellow-800 border border-yellow-300'
-                               : 'bg-red-100 text-red-800 border border-red-300' // Example for Critical
-                         }`}>
-                           {metric.status === 'Normal' ? '✓' : '⚠'} {metric.status} {/* Display icon and status text */}
-                         </span>
+        {/* Add Metric Form (Conditionally Rendered for 'caregiver') */}
+        {user?.role === 'caregiver' && (
+            <div className="mb-8">
+               {/* ... (Form JSX remains the same) ... */}
+               <h2 className="text-xl font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-300">Add New Metric Reading</h2>
+                <form onSubmit={handleAddMetric} className="space-y-4 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div> <label htmlFor="blood_pressure" className="block mb-1 font-medium text-gray-700 text-sm">Blood Pressure</label> <input type="text" id="blood_pressure" name="blood_pressure" value={newMetric.blood_pressure} onChange={handleInputChange} placeholder="e.g., 120/80" required className="input-style"/> </div>
+                    <div> <label htmlFor="heart_rate" className="block mb-1 font-medium text-gray-700 text-sm">Heart Rate (bpm)</label> <input type="number" id="heart_rate" name="heart_rate" value={newMetric.heart_rate} onChange={handleInputChange} placeholder="e.g., 72" required className="input-style"/> </div>
+                    <div> <label htmlFor="glucose_level" className="block mb-1 font-medium text-gray-700 text-sm">Glucose Level (mg/dL)</label> <input type="number" id="glucose_level" name="glucose_level" value={newMetric.glucose_level} onChange={handleInputChange} placeholder="e.g., 95" required className="input-style"/> </div>
+                    <button type="submit" className="w-full btn-primary"> Add Metric Reading </button>
+                </form>
+                <style jsx>{`
+                    .input-style { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; transition: border-color 0.2s, box-shadow 0.2s; }
+                    .input-style:focus { outline: none; border-color: #3B82F6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); }
+                    .btn-primary { padding: 0.625rem 1rem; background-image: linear-gradient(to right, #3B82F6, #1D4ED8); color: white; font-weight: 600; border-radius: 0.5rem; border: none; cursor: pointer; transition: all 0.2s; }
+                    .btn-primary:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+                `}</style>
+            </div>
+        )}
+
+        {/* --- MODIFIED Metrics List Display --- */}
+        <div>
+           <h2 className="text-xl font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-300">Recorded Metrics</h2>
+           <div className="space-y-6"> {/* Add space between each reading group */}
+             {user ? (
+               metricsList && metricsList.length > 0 ? (
+                 // Display newest readings first
+                 metricsList.slice().reverse().map((reading, index) => (
+                   // Create a distinct card for each reading instance (timestamp)
+                   <div key={reading._id || `metric-${index}`} className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
+                      {/* Card Header with Timestamp */}
+                      <div className="bg-gradient-to-r from-gray-100 to-gray-200 p-3 border-b border-gray-300">
+                          <h3 className="text-sm font-semibold text-gray-700">
+                              Reading Time: {reading.timstamp || 'N/A'}
+                          </h3>
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
+                      {/* Card Body with the 3 metrics */}
+                      <div className="p-4 space-y-3">
+                          {/* Blood Pressure */}
+                          <div className="flex items-center justify-between">
+                              <span className="text-base font-medium text-gray-800">Blood Pressure:</span>
+                              <span className="text-lg font-bold text-blue-700">
+                                  {reading.blood_pressure || 'N/A'}
+                              </span>
+                          </div>
+                           {/* Heart Rate */}
+                           <div className="flex items-center justify-between">
+                              <span className="text-base font-medium text-gray-800">Heart Rate:</span>
+                              <span className="text-lg font-bold text-blue-700">
+                                  {reading.heart_rate ? `${reading.heart_rate} bpm` : 'N/A'}
+                              </span>
+                          </div>
+                           {/* Glucose Level */}
+                           <div className="flex items-center justify-between">
+                              <span className="text-base font-medium text-gray-800">Glucose Level:</span>
+                              <span className="text-lg font-bold text-blue-700">
+                                  {reading.glucose_level ? `${reading.glucose_level} mg/dL` : 'N/A'}
+                              </span>
+                          </div>
+                      </div>
+                   </div>
+                 ))
+               ) : (
+                 // Message shown if logged in but no metrics found
+                 <div className="p-5 text-center text-gray-500 bg-white rounded-xl shadow">No health metrics have been recorded yet.</div>
+               )
+             ) : (
+               // Message shown if user data hasn't loaded yet
+               <div className="p-5 text-center text-gray-500 bg-white rounded-xl shadow">Loading user data...</div>
+             )}
+           </div>
         </div>
 
-        {/* Optional: Note */}
-        <div className="mt-6 text-center text-sm text-gray-500"> {/* Restored original margin and font size */}
+        {/* Optional Note */}
+        <div className="mt-8 text-center text-sm text-gray-500"> {/* Increased top margin */}
           <p>Metrics are for informational purposes. Consult your healthcare provider for medical advice.</p>
         </div>
       </div>

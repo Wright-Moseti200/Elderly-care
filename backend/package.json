@@ -12,7 +12,7 @@
   "dependencies": {
     "apicache": "^1.6.3",
     "bcrypt": "^6.0.0",
-    "cloudinary": "^2.7.0",
+    "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
@@ -20,6 +20,7 @@
     "mongoose": "^8.19.1",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
+    "streamifier": "^0.1.1",
     "svix": "^1.76.1"
   }
 }

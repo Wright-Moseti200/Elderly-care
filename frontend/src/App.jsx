@@ -8,13 +8,16 @@ import Medication from './pages/medication'
 import Metric from './pages/metric'
 import Tasks from './pages/tasks'
 import Requests from './pages/requests'
+import ElderlyProvider from './context/context'
+import ProtectedRoute from './ProtectedRoute'
 
 const App = () => {
   return (
      <BrowserRouter>
+     <ElderlyProvider>
     <Routes>
       <Route path="/login" element={<Login/>}/>
-        <Route path="/" element={<Navbar/>}>
+        <Route path="/" element={<ProtectedRoute><Navbar/></ProtectedRoute>}>
           <Route index element={<Home/>}/>
           <Route path="/request" element={<Requests/>}/>
           <Route path="/chat" element={<Chat/>}/>
@@ -23,6 +26,7 @@ const App = () => {
           <Route path='/tasks' element={<Tasks/>}/>
         </Route>
     </Routes>
+    </ElderlyProvider>
     </BrowserRouter>
   )
 }

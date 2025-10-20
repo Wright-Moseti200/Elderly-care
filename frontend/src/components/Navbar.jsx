@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { Outlet, Link } from "react-router-dom";
+import React, { useState, useContext, useEffect } from 'react';
+import { Outlet, Link, NavLink, useNavigate } from "react-router-dom";
 import Footer from './Footer';
+import { ElderlyContext } from '../context/context';
 
 const Navbar = () => {
-  const [activeLink, setActiveLink] = useState('/');
+  const { user, isAuthenticated, loading, logout } = useContext(ElderlyContext);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   const navLinks = [
     { name: 'Home', path: '/', icon: 'home' },
@@ -11,8 +14,15 @@ const Navbar = () => {
     { name: 'Medications', path: '/medication', icon: 'medications' },
     { name: 'Tasks', path: '/tasks', icon: 'tasks' },
     { name: 'Metrics', path: '/metric', icon: 'metrics' },
-    { name: 'Request Caretaker', path: '/request', icon: 'request' } // Added new link
+    { name: 'Request Caretaker', path: '/request', icon: 'request' }
   ];
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, loading, navigate]);
 
   const renderIcon = (iconName) => {
     switch(iconName) {
@@ -46,7 +56,7 @@ const Navbar = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
         );
-      case 'request': // Added icon for request
+      case 'request':
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -57,9 +67,37 @@ const Navbar = () => {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (!user?.userName) return 'U';
+    const names = user.userName.split(' ');
+    if (names.length >= 2) {
+      return (names[0][0] + names[1][0]).toUpperCase();
+    }
+    return user.userName.substring(0, 2).toUpperCase();
+  };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Don't render navbar if not authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
+
   return (
     <>
-      {/* Navbar */}
       <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -72,26 +110,27 @@ const Navbar = () => {
               </Link>
             </div>
 
-            {/* Navigation Links - Desktop */}
+            {/* Desktop Navigation Links */}
             <div className="hidden md:flex items-center space-x-1">
               {navLinks.map((link) => (
-                <Link
+                <NavLink
                   key={link.path}
                   to={link.path}
-                  onClick={() => setActiveLink(link.path)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
-                    activeLink === link.path
-                      ? 'bg-blue-50 text-blue-600'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
+                  className={({ isActive }) =>
+                    `flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                      isActive
+                        ? 'bg-blue-50 text-blue-600'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`
+                  }
                 >
                   {renderIcon(link.icon)}
                   <span>{link.name}</span>
-                </Link>
+                </NavLink>
               ))}
             </div>
 
-            {/* User Profile & Notifications */}
+            {/* Desktop User Section */}
             <div className="hidden md:flex items-center gap-4">
               {/* Notification Bell */}
               <button className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
@@ -101,53 +140,105 @@ const Navbar = () => {
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
               </button>
 
-              {/* User Avatar */}
+              {/* User Info */}
               <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-gray-900">Lucy Njeri</p>
-                  <p className="text-xs text-gray-500">Caregiver</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {user?.userName || 'Guest User'}
+                  </p>
+                  <p className="text-xs text-gray-500 capitalize">
+                    {user?.role || 'No Role'}
+                  </p>
                 </div>
                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center text-white font-bold cursor-pointer hover:shadow-lg transition-shadow">
-                  LN
+                  {getUserInitials()}
                 </div>
               </div>
+
+              {/* Logout Button */}
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
+                title="Logout"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                </svg>
+                <span>Logout</span>
+              </button>
             </div>
 
             {/* Mobile Menu Button */}
             <div className="md:hidden">
-              <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  {isMobileMenuOpen ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  )}
                 </svg>
               </button>
             </div>
           </div>
 
-          {/* Mobile Navigation - Hidden by default */}
-          <div className="md:hidden pb-4 pt-2 space-y-1">
-            {navLinks.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                onClick={() => setActiveLink(link.path)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-200 ${
-                  activeLink === link.path
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
+          {/* Mobile Menu */}
+          {isMobileMenuOpen && (
+            <div className="md:hidden pb-4 pt-2 space-y-1 border-t border-gray-200">
+              {/* Mobile User Info */}
+              <div className="flex items-center gap-3 px-4 py-3 mb-2 bg-gray-50 rounded-lg">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center text-white font-bold">
+                  {getUserInitials()}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {user?.userName || 'Guest User'}
+                  </p>
+                  <p className="text-xs text-gray-500 capitalize">
+                    {user?.role || 'No Role'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Mobile Navigation Links */}
+              {navLinks.map((link) => (
+                <NavLink
+                  key={link.path}
+                  to={link.path}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-base transition-all duration-200 ${
+                      isActive
+                        ? 'bg-blue-50 text-blue-600'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`
+                  }
+                >
+                  {renderIcon(link.icon)}
+                  <span>{link.name}</span>
+                </NavLink>
+              ))}
+
+              {/* Mobile Logout Button */}
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-base text-red-600 hover:bg-red-50 transition-colors duration-200 mt-2"
               >
-                {renderIcon(link.icon)}
-                <span>{link.name}</span>
-              </Link>
-            ))}
-          </div>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                </svg>
+                <span>Logout</span>
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
-      {/* Page Content */}
       <Outlet />
 
-      {/* Footer */}
       <Footer />
     </>
   );
