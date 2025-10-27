@@ -89,25 +89,32 @@ const Requests = () => {
 
   const handleSubmitRequest = async (e) => {
     e.preventDefault();
-    if (!formData.caretaker) {
-      setLocalError("Please select a caretaker.");
-      return;
-    }
     setIsSubmitting(true);
     setLocalError(null);
 
-    let historyFileUrl = null;
-
     try {
+      // Validate required fields
+      if (!formData.caretaker) {
+        throw new Error("Please select a caretaker");
+      }
+
+      // First handle file upload if exists
+      let historyFileUrl = '';
       if (formData.historyFile) {
         const uploadFormData = new FormData();
         uploadFormData.append('document', formData.historyFile);
-        historyFileUrl = await uploadFile(uploadFormData);
-        if (!historyFileUrl) {
-          throw new Error("File upload succeeded but no URL was returned.");
+        
+        try {
+          historyFileUrl = await uploadFile(uploadFormData);
+          if (!historyFileUrl) {
+            throw new Error("File upload failed - no URL returned");
+          }
+        } catch (uploadError) {
+          throw new Error(`File upload failed: ${uploadError.message}`);
         }
       }
 
+      // Prepare complete request data including file URL
       const requestData = {
         name: formData.name,
         age: formData.age,
@@ -115,13 +122,15 @@ const Requests = () => {
         number: formData.number,
         address: formData.address,
         conditions: formData.conditions,
-        history: historyFileUrl || '',
+        history: historyFileUrl, // Add the file URL to request data
         caretaker: formData.caretaker,
-        family: user.userName,
+        family: user.userName
       };
 
+      // Create the request with all data
       await createRequest(requestData);
 
+      // Reset form and file input
       setFormData({
         name: '',
         age: '',
@@ -133,18 +142,22 @@ const Requests = () => {
         caretaker: ''
       });
 
-      try {
-        document.getElementById('historyFile').value = null;
-      } catch (err) {
-        console.log('Could not reset file input');
+      // Reset file input element
+      const fileInput = document.getElementById('historyFile');
+      if (fileInput) {
+        fileInput.value = '';
       }
 
-      alert("Request sent successfully!");
+      // Show success message
+      alert("Request successfully created and medical history uploaded!");
+
+      // Refresh requests list
       const updatedRequests = await getRequests();
       setRequestsList(Array.isArray(updatedRequests) ? updatedRequests : []);
-    } catch (err) {
-      console.error("Error creating request:", err);
-      setLocalError(err.message || 'Failed to send request. Please check details and try again.');
+
+    } catch (error) {
+      console.error("Submission error:", error);
+      setLocalError(error.message || 'Failed to submit request. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

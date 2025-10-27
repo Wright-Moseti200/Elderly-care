@@ -347,15 +347,15 @@ let Upload = (req,res)=>{
     try{
         // --- Added check for req.file ---
         if (!req.file) {
-           return res.status(400).json({
+           return res.status(404).json({
                success: false,
                message: "No file uploaded."
            });
         }
         res.status(200).json({
             success:true,
-            url:req.file.path// Assuming path is correct from middleware
-        })
+            url:req.file.path
+        });
     }
     catch(error){
         // --- Added return --- (and check headersSent)
