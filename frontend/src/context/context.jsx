@@ -4,7 +4,7 @@
 import React, { createContext, useState, useEffect } from 'react';
 
 // Configuration
-const BASE_URL = 'http://localhost:4000/api/user';
+const BASE_URL = 'https://elderly-care-y6qb.onrender.com';
 const TOKEN_KEY = 'auth-token';
 
 // Create Context
