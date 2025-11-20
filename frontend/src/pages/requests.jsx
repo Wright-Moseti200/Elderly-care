@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useContext } from 'react';
 import { ElderlyContext } from '../context/context';
 
@@ -31,6 +30,10 @@ const Requests = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState(null);
 
+  // Helper to normalize role check (Backend uses "caregiver", frontend might use "caretaker")
+  const isCaretaker = user?.role?.toLowerCase() === 'caregiver' || user?.role?.toLowerCase() === 'caretaker';
+  const isFamily = user?.role?.toLowerCase() === 'family';
+
   // Fetch Initial Data
   useEffect(() => {
     const fetchData = async () => {
@@ -43,14 +46,14 @@ const Requests = () => {
       try {
         console.log('Fetching data for user role:', user?.role);
 
-        if (user?.role === 'family') {
+        // Only fetch caretaker list if user is family
+        if (isFamily) {
           caretakers = await getCareTakers();
         }
         requests = await getRequests();
 
         setCaretakersList(Array.isArray(caretakers) ? caretakers : []);
         setRequestsList(Array.isArray(requests) ? requests : []);
-        console.log('Fetched Requests:', requests);
       } catch (err) {
         console.error("Error fetching data:", err);
         setLocalError('Failed to load initial data. Please try again.');
@@ -74,17 +77,10 @@ const Requests = () => {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setFormData((prevData) => ({
-        ...prevData,
-        historyFile: file,
-      }));
-    } else {
-      setFormData((prevData) => ({
-        ...prevData,
-        historyFile: null,
-      }));
-    }
+    setFormData((prevData) => ({
+      ...prevData,
+      historyFile: file || null,
+    }));
   };
 
   const handleSubmitRequest = async (e) => {
@@ -93,12 +89,10 @@ const Requests = () => {
     setLocalError(null);
 
     try {
-      // Validate required fields
       if (!formData.caretaker) {
         throw new Error("Please select a caretaker");
       }
 
-      // First handle file upload if exists
       let historyFileUrl = '';
       if (formData.historyFile) {
         const uploadFormData = new FormData();
@@ -106,15 +100,12 @@ const Requests = () => {
         
         try {
           historyFileUrl = await uploadFile(uploadFormData);
-          if (!historyFileUrl) {
-            throw new Error("File upload failed - no URL returned");
-          }
+          if (!historyFileUrl) throw new Error("File upload failed - no URL returned");
         } catch (uploadError) {
           throw new Error(`File upload failed: ${uploadError.message}`);
         }
       }
 
-      // Prepare complete request data including file URL
       const requestData = {
         name: formData.name,
         age: formData.age,
@@ -122,15 +113,14 @@ const Requests = () => {
         number: formData.number,
         address: formData.address,
         conditions: formData.conditions,
-        history: historyFileUrl, // Add the file URL to request data
+        history: historyFileUrl,
         caretaker: formData.caretaker,
         family: user.userName
       };
 
-      // Create the request with all data
       await createRequest(requestData);
 
-      // Reset form and file input
+      // Reset form
       setFormData({
         name: '',
         age: '',
@@ -141,23 +131,18 @@ const Requests = () => {
         historyFile: null,
         caretaker: ''
       });
-
-      // Reset file input element
+      
       const fileInput = document.getElementById('historyFile');
-      if (fileInput) {
-        fileInput.value = '';
-      }
+      if (fileInput) fileInput.value = '';
 
-      // Show success message
-      alert("Request successfully created and medical history uploaded!");
+      alert("Request successfully created and sent!");
 
-      // Refresh requests list
       const updatedRequests = await getRequests();
       setRequestsList(Array.isArray(updatedRequests) ? updatedRequests : []);
 
     } catch (error) {
       console.error("Submission error:", error);
-      setLocalError(error.message || 'Failed to submit request. Please try again.');
+      setLocalError(error.message || 'Failed to submit request.');
     } finally {
       setIsSubmitting(false);
     }
@@ -165,11 +150,9 @@ const Requests = () => {
 
   const handleDropdownStatusChange = async (requestId, event) => {
     const newStatus = event.target.value;
-    console.log(`Dropdown change: Request ID=${requestId}, New Status=${newStatus}`);
-
     const currentRequest = requestsList.find(r => r._id === requestId);
-    if (!newStatus || newStatus === 'unknown' || newStatus === currentRequest?.Status?.toLowerCase()) {
-      console.log("Status not changed or invalid, skipping update.");
+    
+    if (!newStatus || newStatus === currentRequest?.Status?.toLowerCase()) {
       return;
     }
 
@@ -177,13 +160,12 @@ const Requests = () => {
     if (contextError) setError(null);
 
     try {
-      console.log(`Calling updateRequestStatus for ID=${requestId} with status=${newStatus}`);
       await updateRequestStatus(requestId, newStatus);
 
-      console.log("Refetching requests after status update...");
+      // Update UI Optimistically or Refetch
       const updatedRequests = await getRequests();
       setRequestsList(Array.isArray(updatedRequests) ? updatedRequests : []);
-      console.log("Requests list updated.");
+      
     } catch (err) {
       console.error("Error updating status:", err);
       setLocalError(err.message || 'Failed to update request status.');
@@ -191,13 +173,13 @@ const Requests = () => {
   };
 
   const renderStatusBadge = (status) => {
-    status = status?.toLowerCase() || 'pending';
+    const normalizedStatus = status?.toLowerCase() || 'pending';
     let bgColor = 'bg-gray-100';
     let textColor = 'text-gray-800';
     let borderColor = 'border-gray-300';
     let icon = '⚪';
 
-    switch (status) {
+    switch (normalizedStatus) {
       case 'pending':
         bgColor = 'bg-yellow-100';
         textColor = 'text-yellow-800';
@@ -223,7 +205,7 @@ const Requests = () => {
 
     return (
       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${bgColor} ${textColor} ${borderColor} flex-shrink-0`}>
-        {icon} <span className="ml-1 capitalize">{status}</span>
+        {icon} <span className="ml-1 capitalize">{normalizedStatus}</span>
       </span>
     );
   };
@@ -234,10 +216,10 @@ const Requests = () => {
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text text-transparent">
-            {user?.role === 'family' ? 'Request Caretaker' : 'Manage Care Requests'}
+            {isFamily ? 'Request Caretaker' : 'Manage Care Requests'}
           </h1>
           <p className="text-gray-600 mt-2">
-            {user?.role === 'family' 
+            {isFamily 
               ? 'Fill out the details below to request care' 
               : 'Review and respond to incoming care requests'}
           </p>
@@ -252,7 +234,7 @@ const Requests = () => {
         )}
 
         {/* Request Form (Family Only) */}
-        {user?.role === 'family' && (
+        {isFamily && (
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-gray-100">
             <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">
               New Request Details
@@ -273,7 +255,6 @@ const Requests = () => {
                     onChange={handleChange}
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., John Doe"
                   />
                 </div>
 
@@ -289,10 +270,7 @@ const Requests = () => {
                     value={formData.age}
                     onChange={handleChange}
                     required
-                    min="1"
-                    max="150"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., 75"
                   />
                 </div>
 
@@ -319,7 +297,7 @@ const Requests = () => {
                 {/* Emergency Contact */}
                 <div>
                   <label htmlFor="number" className="block text-sm font-medium text-gray-700 mb-1">
-                    Emergency Contact (Phone)
+                    Emergency Contact
                   </label>
                   <input
                     type="tel"
@@ -329,7 +307,6 @@ const Requests = () => {
                     onChange={handleChange}
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., +1 (555) 123-4567"
                   />
                 </div>
 
@@ -354,7 +331,7 @@ const Requests = () => {
                         </option>
                       ))
                     ) : (
-                      <option disabled>Loading or no caretakers...</option>
+                      <option disabled>Loading or no caretakers available...</option>
                     )}
                   </select>
                 </div>
@@ -373,14 +350,13 @@ const Requests = () => {
                   required
                   rows="3"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., 123 Main St, Apartment 4B, City, State, ZIP"
                 />
               </div>
 
               {/* Conditions */}
               <div className="mt-6">
                 <label htmlFor="conditions" className="block text-sm font-medium text-gray-700 mb-1">
-                  Medical Conditions & Medications
+                  Medical Conditions
                 </label>
                 <textarea
                   id="conditions"
@@ -389,7 +365,6 @@ const Requests = () => {
                   onChange={handleChange}
                   rows="3"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., Diabetes, High blood pressure, Taking insulin twice daily"
                 />
               </div>
 
@@ -398,48 +373,14 @@ const Requests = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Upload Medical History (Optional)
                 </label>
-                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-blue-400 transition-colors">
-                  <div className="space-y-1 text-center">
-                    <svg
-                      className="mx-auto h-12 w-12 text-gray-400"
-                      stroke="currentColor"
-                      fill="none"
-                      viewBox="0 0 48 48"
-                    >
-                      <path
-                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <div className="flex text-sm text-gray-600 justify-center">
-                      <label
-                        htmlFor="historyFile"
-                        className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none"
-                      >
-                        <span>Upload a file</span>
-                        <input
-                          id="historyFile"
-                          name="historyFile"
-                          type="file"
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                          onChange={handleFileChange}
-                          className="sr-only"
-                        />
-                      </label>
-                      <p className="pl-1">or drag and drop</p>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      PDF, DOC, DOCX, JPG, PNG up to 10MB
-                    </p>
-                    {formData.historyFile && (
-                      <p className="text-xs text-green-600 mt-1 truncate">
-                        Selected: {formData.historyFile.name}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                <input
+                  id="historyFile"
+                  name="historyFile"
+                  type="file"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={handleFileChange}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
               </div>
 
               {/* Submit Button */}
@@ -451,7 +392,7 @@ const Requests = () => {
                     isSubmitting ? 'opacity-75 cursor-not-allowed' : 'hover:shadow-xl hover:scale-105'
                   }`}
                 >
-                  {isSubmitting ? 'Sending Request...' : 'Send Request'}
+                  {isSubmitting ? 'Sending...' : 'Send Request'}
                 </button>
               </div>
             </form>
@@ -461,7 +402,7 @@ const Requests = () => {
         {/* Requests List Section */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
           <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">
-            {user?.role === 'family' ? 'Your Sent Requests' : 'Incoming Requests'}
+            {isFamily ? 'Your Sent Requests' : 'Incoming Requests'}
           </h2>
 
           {user ? (
@@ -478,22 +419,27 @@ const Requests = () => {
                         {req.Names} (Age: {req.Age})
                       </h3>
 
-                      {/* Conditional Status Display/Update */}
-                      {user?.role === 'caretaker' && req.Status?.toLowerCase() === 'pending' ? (
-                        <select
-                          name="statusUpdate"
-                          value={req.Status?.toLowerCase() || 'pending'}
-                          onChange={(e) => handleDropdownStatusChange(req._id, e)}
-                          className="text-xs font-semibold border rounded-full px-3 py-1 bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
-                          style={{ minWidth: '110px' }}
-                        >
-                          <option value="pending">⏳ Pending</option>
-                          <option value="accepted">✅ Accepted</option>
-                          <option value="declined">❌ Declined</option>
-                        </select>
+                      {/* --- FIX START: Logic for Update Permissions --- */}
+                      {/* If user is Caretaker, show Dropdown. If Family, show Badge */}
+                      {isCaretaker ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-gray-500 uppercase">Action:</span>
+                          <select
+                            name="statusUpdate"
+                            value={req.Status?.toLowerCase() || 'pending'}
+                            onChange={(e) => handleDropdownStatusChange(req._id, e)}
+                            className="text-sm font-semibold border rounded-lg px-3 py-1 bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer shadow-sm hover:border-blue-400"
+                            style={{ minWidth: '130px' }}
+                          >
+                            <option value="pending">⏳ Pending</option>
+                            <option value="accepted">✅ Accept</option>
+                            <option value="declined">❌ Decline</option>
+                          </select>
+                        </div>
                       ) : (
                         renderStatusBadge(req.Status)
                       )}
+                      {/* --- FIX END --- */}
                     </div>
 
                     {/* Request Details */}
@@ -513,9 +459,9 @@ const Requests = () => {
                       </p>
                       <p className="text-sm text-gray-600">
                         <span className="font-medium">
-                          {user?.role === 'family' ? 'Requested Caretaker:' : 'Requested By:'}
+                          {isFamily ? 'Requested Caretaker:' : 'Requested By:'}
                         </span>{' '}
-                        {user?.role === 'family' ? req.Caretaker : req.Family_member}
+                        {isFamily ? req.Caretaker : req.Family_member}
                       </p>
                     </div>
 
@@ -525,16 +471,18 @@ const Requests = () => {
                         href={req.Medical_history}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:underline mt-3 inline-block"
+                        className="text-sm text-blue-600 hover:underline mt-3 inline-flex items-center gap-1"
                       >
-                        📄 View Medical History Document
+                         📄 View Medical History Document
                       </a>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-center text-gray-500 py-8">No requests found.</p>
+              <p className="text-center text-gray-500 py-8">
+                {isFamily ? 'You have not sent any requests yet.' : 'No requests found.'}
+              </p>
             )
           ) : (
             <p className="text-center text-gray-500 py-8">Loading user data...</p>
